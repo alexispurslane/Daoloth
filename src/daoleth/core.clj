@@ -1,17 +1,9 @@
 (ns daoleth.core
   (:gen-class)
-  (:require [daoleth.event-handling :as evt]
+  (:require [daoleth.constants :as dc]
+            [daoleth.event-handling :as evt]
             [seesaw.bind :as bind])
-  (:use seesaw.core))
-
-(def initial-state {
-                    :objects {:wall \# :door \o :floor \.}
-                    :filename "unknown"
-                    :map nil
-                    :size [20 20]
-                    :saved? false
-                    :painting-object :floor
-                    })
+  (:use seesaw.core clojure.data))
 
 (defn make-menu-bar [state]
   (let [commands [["New"  :event-new-level]
@@ -23,7 +15,7 @@
                               :listen [:action (fn [e]
                                                  (evt/event-handler e state))])
                      commands)]
-    (horizontal-panel :items buttons)))
+    (horizontal-panel :items (conj buttons (label :id :filename :text (:filename @state))))))
 
 (defn get-obj-pair [key map]
   (let [x (key map)] [x (x (:objects map))]))
@@ -36,51 +28,74 @@
      "  "
      chr)))
 
-(defn make-split-view [state]
-  (let [set-state #(swap! state assoc %1 %2)
-        outline   #(config! %2 :background (if %1 :grey :white))
+(defn generate-squares [set-state state]
+  (let [outline        #(config! %2 :background (if %1 :grey :white))
         button-handler (fn [loc e]
                          (outline true e)
                          (when (:drawing? @state)
-                           (println "Moved")
                            (let [val ((:painting-object @state) (:objects @state))
                                  new-map (assoc (:map @state) loc val)]
                              (text! e (str val))
-                             (swap! state assoc :map new-map))))
-        object-list (listbox :model (:objects @state)
+                             (set-state :map new-map))))]
+    (map #(label :background :white
+                 :h-text-position :center
+                 :v-text-position :center
+                 :text (str %1)
+                 :listen [:mouse-entered   (partial button-handler %2)
+                          :mouse-exited    (partial outline false)
+                          :mouse-pressed   (fn [e]
+                                             (println "Pressed")
+                                             (set-state :drawing? true)
+                                             (button-handler %2 e))
+                          :mouse-released  (fn [_]
+                                             (println "Released")
+                                             (set-state :drawing? false))])
+         (:map @state)
+         (iterate inc 1))))
+
+(defn make-split-view [state]
+  (let [set-state   (fn [a b]
+                      (swap! state assoc a b))
+        object-list (listbox :id :objects
+                             :model (:objects @state)
                              :renderer (fn [this {:keys [value]}]
                                          (text! this (beautify value)))
                              :listen [:selection
-                                      #(set-state :painting-object (first (selection %)))])
-        squares (map #(label :background :white
-                             :h-text-position :center
-                             :v-text-position :center
-                             :text (str %1)
-                             :listen [:mouse-entered   (partial button-handler %2)
-                                      :mouse-exited    (partial outline false)
-                                      :mouse-pressed   (fn [_]
-                                                         (set-state :drawing? true))
-                                      :mouse-released  (fn [_]
-                                                         (set-state :drawing? false))])
-                     (:map @state)
-                     (iterate inc 1))
-        grid-map (grid-panel :rows (first (:size @state))
-                             :columns (second (:size @state))
-                             :items squares
-                             :hgap 0 :vgap 0)]
+                                      (fn [e]
+                                        (when (selection e)
+                                          (set-state :painting-object (first (selection e)))))])
+        squares     (generate-squares set-state state)
+        grid-map    (grid-panel :rows (first (:size @state))
+                                :columns (second (:size @state))
+                                :items squares
+                                :id :canvas
+                                :hgap 0 :vgap 0)]
     (selection! object-list (get-obj-pair :painting-object @state))
     (left-right-split (scrollable object-list) (scrollable grid-map) :divider-location 1/3)))
 
+(defn add-behaviors [root state]
+  (add-watch state :filechange (fn [k r o n]
+                                 (println "Updating filename")
+                                 (config! (select root [:#filename]) :text (:filename n))
+                                 (when (not (= (:objects o) (:objects n)))
+                                   (println "Updating objects")
+                                   (config! (select root [:#objects]) :model (:objects n))
+                                   (swap! state assoc :new-file? false)
+                                   (let [set-state #(swap! state assoc %1 %2)
+                                         squares (generate-squares set-state r)]
+                                     (config! (select root [:#canvas]) :items squares)))))
+  root)
+
 (defn -main [& args]
   (native!)
-  (let [state (atom initial-state)]
-    (swap! state assoc :map (vec (replicate (apply * (:size @state)) \.)))
-    (println (:map @state))
+  (let [state (atom dc/initial-state)]
+    (dc/create-initial-map state)
     (invoke-later
      (-> (frame :title "Daoleth Level Editor"
                 :content (border-panel
                           :north (make-menu-bar state)
                           :center (make-split-view state)
                           :vgap 5 :hgap 5 :border 5))
+         (add-behaviors state)
          pack!
          show!))))

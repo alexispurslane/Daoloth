@@ -1,13 +1,15 @@
 (ns daoleth.event-handling
   (:use seesaw.core)
-  (:require [daoleth.core :as dc]))
+  (:require [daoleth.constants :as dc]))
 
 (defn get-state-from-file [filename]
-  ; TODO Write a fun for loading from file
-  )
+  (->> filename slurp read-string))
+
 (defn write-state-to-file [state]
-  ;TODO Write a fn for writing to file
-  )
+  (spit (:filename state) (with-out-str
+                            (-> state
+                                (select-keys [:map :size :filename :objects :painting-object])
+                                pr))))
 
 (defn make-dialog [& items]
   (dialog
@@ -19,15 +21,20 @@
 (defn event-handler [e state]
   (case (config e :id)
     :event-new-level
-    (reset! state dc/initial-state)
     (let [results (show! (make-dialog "Level Name:"
                                       (text :text "unkown-level" :id :level-name)))]
-      (swap! state assoc :filename (first results)))
+      (reset! state dc/initial-state)
+      (dc/create-initial-map state)
+      (swap! state assoc :filename (first results))
+      (swap! state assoc :new-file? true)
+      (println @state))
 
     :event-open-level
     (let [results (show! (make-dialog "Level Name:"
                                       (text :text "unkown-level" :id :level-name)))]
-      (reset! state (get-state-from-file (first results))))
+      (reset! state (get-state-from-file (first results)))
+      (swap! state assoc :new-file? true)
+      (println @state))
 
     :event-save-level
     (do
