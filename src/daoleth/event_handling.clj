@@ -2,49 +2,53 @@
   (:use seesaw.core)
   (:require [daoleth.constants :as dc]))
 
-(defn get-state-from-file [filename]
-  (->> filename slurp read-string))
-
-(defn write-state-to-file [state]
-  (spit (:filename state) (with-out-str
-                            (-> state
-                                (select-keys [:map :size :filename :objects :painting-object])
-                                pr))))
-
 (defn make-dialog [& items]
   (dialog
    :type :question
-   :success-fn #(map text (select % [:<javax.swing.JTextField>]))
+   :success-fn (fn [root] root)
    :option-type :ok-cancel
    :content (vertical-panel :items items)))
 
 (defn event-handler [e state]
   (case (config e :id)
     :event-new-level
-    (let [results (show! (make-dialog "Level Name:"
-                                      (text :text "unkown-level" :id :level-name)))]
-      (reset! state dc/initial-state)
-      (dc/create-initial-map state)
-      (swap! state assoc :filename (first results))
-      (swap! state assoc :new-file? true)
-      (println @state))
+    (let [model    (spinner-model 20 :from 2 :to 100)
+          root     (show! (make-dialog "Level Name:"
+                                       (text :text "unkown-level" :id :level-name)
+                                       (horizontal-panel
+                                        :items ["Size: "
+                                                (spinner :id :width :model model)
+                                                (spinner :id :height :model model)])))]
+      (when root
+        (let [filename (text (select root [:#level-name]))
+              width    (value (select root [:#width]))
+              height   (value (select root [:#height]))]
+          (reset! state dc/initial-state)
+          (swap! state assoc :filename filename)
+          (swap! state assoc :size [width height])
+          (dc/create-initial-map state)
+          (swap! state assoc :new-file? true)
+          (println @state))))
 
     :event-open-level
-    (let [results (show! (make-dialog "Level Name:"
+    (let [root (show! (make-dialog "Level Name:"
                                       (text :text "unkown-level" :id :level-name)))]
-      (reset! state (get-state-from-file (first results)))
-      (swap! state assoc :new-file? true)
-      (println @state))
+      (when root
+        (reset! state (dc/get-state-from-file (text (select root [:#level-name]))))
+        (swap! state assoc :new-file? true)
+        (println @state)))
 
     :event-save-level
     (do
       (swap! state assoc :saved? true)
-      (write-state-to-file @state))
+      (dc/write-state-to-file @state))
 
     :event-create-object
-    (let [results (show! (make-dialog "Object Name:"
+    (let [root    (show! (make-dialog "Object Name:"
                                       (text :text "crate" :id :object-name)
                                       "Object Character:"
-                                      (text :text "=" :id :object-char)))
-          object [(keyword (first results)) (first (second results))]]
-      (swap! state assoc :objects (conj (:objects @state) object)))))
+                                      (text :text "=" :id :object-char)))]
+      (when root
+        (let [results (map text (select root [:<javax.swing.JTextField>]))
+              object  [(keyword (first results)) (first (second results))]]
+          (swap! state assoc :objects (conj (:objects @state) object)))))))

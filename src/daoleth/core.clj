@@ -15,7 +15,8 @@
                               :listen [:action (fn [e]
                                                  (evt/event-handler e state))])
                      commands)]
-    (horizontal-panel :items (conj buttons (label :id :filename :text (:filename @state))))))
+    (horizontal-panel :items (conj buttons (label :id :filename
+                                                  :text (str (:filename @state) "  "))))))
 
 (defn get-obj-pair [key map]
   (let [x (key map)] [x (x (:objects map))]))
@@ -77,7 +78,8 @@
   (add-watch state :filechange (fn [k r o n]
                                  (println "Updating filename")
                                  (config! (select root [:#filename]) :text (:filename n))
-                                 (when (not (= (:objects o) (:objects n)))
+                                 (when (or (not (= (:objects o) (:objects n)))
+                                           (or (:new-file? o) (:new-file? n)))
                                    (println "Updating objects")
                                    (config! (select root [:#objects]) :model (:objects n))
                                    (swap! state assoc :new-file? false)
@@ -89,7 +91,9 @@
 (defn -main [& args]
   (native!)
   (let [state (atom dc/initial-state)]
-    (dc/create-initial-map state)
+    (if (not (empty? args))
+      (reset! state (dc/get-state-from-file (first args)))
+      (dc/create-initial-map state))
     (invoke-later
      (-> (frame :title "Daoleth Level Editor"
                 :content (border-panel
