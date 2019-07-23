@@ -59,9 +59,9 @@
      (when (:drawing? @state)
        (let [val            ((:painting-object @state) (:objects @state))
              [width height] (:size @state)
-             [pos-x pos-y]  [(mod loc width)
-                             (mod (int (/ loc width)) height)]
-             new-map        (update-in (:map @state) [pos-y pos-x] (fn [o] val))]
+             pos-2d         [(mod loc width) (mod (int (/ loc width)) height)]
+             new-map        (dc/map-effect (:mode @state) (:map @state) pos-2d val)]
+         (swap! state assoc :saved? false)
          (text! e (str val))
          (swap! state assoc :map new-map)))
 

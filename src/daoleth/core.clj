@@ -10,13 +10,23 @@
                   ["Open" :event-open-level]
                   ["Save" :event-save-level]
                   ["+"    :event-create-object]]
-        buttons (map #(button :text (first %)
-                              :id (second %)
-                              :listen [:action (fn [e]
-                                                 (evt/event-handler e state))])
-                     commands)]
-    (horizontal-panel :items (conj buttons (label :id :filename
-                                                  :text (str (:filename @state) "  "))))))
+        buttons  (map #(button :text (first %)
+                               :id (second %)
+                               :listen [:action (fn [e]
+                                                  (evt/event-handler e state))])
+                      commands)
+        names     [["Paint" :paintbrush]
+                   ["Bucket" :bucketfill]]
+        tools     (combobox :model names :renderer (fn [this {:keys [value]}]
+                                                     (text! this (first value)))
+                            :listen [:action (fn [e]
+                                               (swap! state assoc :mode (second (selection e))))])
+
+        items (vec (concat buttons
+                           [tools (label :id :filename
+                                         :text (str "    " (:filename @state)))]))]
+    (println items)
+    (horizontal-panel :items items)))
 
 (defn get-obj-pair [key map]
   (let [x (key map)] [x (x (:objects map))]))
@@ -70,7 +80,8 @@
 (defn add-behaviors [root state]
   (add-watch state :statechange (fn [k r o n]
                                   (println "Updating filename")
-                                  (config! (select root [:#filename]) :text (:filename n))
+                                  (config! (select root [:#filename])
+                                           :text (str "    " (:filename n) (if (:saved? n) "" "+")))
                                   (when (or (not (= (:objects o) (:objects n)))
                                             (or (:new-file? o) (:new-file? n)))
                                     (println "Updating objects")
