@@ -29,30 +29,23 @@
      "  "
      chr)))
 
-(defn generate-squares [set-state state]
-  (let [outline        #(config! %2 :background (if %1 :grey :white))
-        button-handler (fn [loc e]
-                         (outline true e)
-                         (when (:drawing? @state)
-                           (let [val ((:painting-object @state) (:objects @state))
-                                 new-map (assoc (:map @state) loc val)]
-                             (text! e (str val))
-                             (set-state :map new-map))))]
+(defn generate-squares [state]
+  (let [outline #(config! %2 :background (if %1 :grey :white))]
     (map #(label :background :white
                  :h-text-position :center
                  :v-text-position :center
                  :text (str %1)
-                 :listen [:mouse-entered   (partial button-handler %2)
+                 :listen [:mouse-entered   (fn [e]
+                                             (outline true e)
+                                             (evt/event-handler e :draw state %2))
                           :mouse-exited    (partial outline false)
                           :mouse-pressed   (fn [e]
-                                             (println "Pressed")
-                                             (set-state :drawing? true)
-                                             (button-handler %2 e))
-                          :mouse-released  (fn [_]
-                                             (println "Released")
-                                             (set-state :drawing? false))])
-         (:map @state)
-         (iterate inc 1))))
+                                             (evt/event-handler e :start-draw state %2)
+                                             (evt/event-handler e :draw state %2))
+                          :mouse-released  (fn [e]
+                                             (evt/event-handler e :end-draw state %2))])
+         (apply concat (:map @state))
+         (iterate inc 0))))
 
 (defn make-split-view [state]
   (let [set-state   (fn [a b]
@@ -65,7 +58,7 @@
                                       (fn [e]
                                         (when (selection e)
                                           (set-state :painting-object (first (selection e)))))])
-        squares     (generate-squares set-state state)
+        squares     (generate-squares state)
         grid-map    (grid-panel :rows (first (:size @state))
                                 :columns (second (:size @state))
                                 :items squares
@@ -75,17 +68,16 @@
     (left-right-split (scrollable object-list) (scrollable grid-map) :divider-location 1/3)))
 
 (defn add-behaviors [root state]
-  (add-watch state :filechange (fn [k r o n]
-                                 (println "Updating filename")
-                                 (config! (select root [:#filename]) :text (:filename n))
-                                 (when (or (not (= (:objects o) (:objects n)))
-                                           (or (:new-file? o) (:new-file? n)))
-                                   (println "Updating objects")
-                                   (config! (select root [:#objects]) :model (:objects n))
-                                   (swap! state assoc :new-file? false)
-                                   (let [set-state #(swap! state assoc %1 %2)
-                                         squares (generate-squares set-state r)]
-                                     (config! (select root [:#canvas]) :items squares)))))
+  (add-watch state :statechange (fn [k r o n]
+                                  (println "Updating filename")
+                                  (config! (select root [:#filename]) :text (:filename n))
+                                  (when (or (not (= (:objects o) (:objects n)))
+                                            (or (:new-file? o) (:new-file? n)))
+                                    (println "Updating objects")
+                                    (config! (select root [:#objects]) :model (:objects n))
+                                    (swap! state assoc :new-file? false)
+                                    (config! (select root [:#canvas])
+                                             :items (generate-squares r)))))
   root)
 
 (defn -main [& args]
@@ -94,6 +86,8 @@
     (if (not (empty? args))
       (reset! state (dc/get-state-from-file (first args)))
       (dc/create-initial-map state))
+    (if (nil? (:painting-object @state))
+      (swap! state assoc :painting-object (last (keys (:objects @state)))))
     (invoke-later
      (-> (frame :title "Daoleth Level Editor"
                 :content (border-panel
