@@ -45,10 +45,10 @@
        (dc/write-state-to-file @state))
 
      :event-create-object
-     (let [root    (show! (make-dialog "Object Name:"
-                                       (text :text "crate" :id :object-name)
-                                       "Object Character:"
-                                       (text :text "=" :id :object-char)))]
+     (let [root (show! (make-dialog "Object Name:"
+                                    (text :text "crate" :id :object-name)
+                                    "Object Character:"
+                                    (text :text "=" :id :object-char)))]
        (when root
          (let [results (map text (select root [:<javax.swing.JTextField>]))
                object  [(keyword (first results)) (first (second results))]]
@@ -56,17 +56,17 @@
   ([e event-type state loc]
    (case event-type
      :draw
-     (when (:drawing? @state)
-       (let [val            ((:painting-object @state) (:objects @state))
-             [width height] (:size @state)
-             pos-2d         [(mod loc width) (mod (int (/ loc width)) height)]
-             new-map        (dc/map-effect (:mode @state) (:map @state) pos-2d val)]
-         (swap! state assoc :saved? false)
-         (text! e (str val))
-         (swap! state assoc :map new-map)))
+     (let [val            ((:painting-object @state) (:objects @state))
+           [width height] (:size @state)
+           pos-2d         [(mod loc width) (mod (int (/ loc width)) height)]
+           new-map        (dc/map-effect (:mode @state) (:map @state) pos-2d val)]
+       (swap! state assoc :saved? false)
+       (swap! state assoc :map new-map))
 
      :start-draw
-     (swap! state assoc :drawing? true)
+     (do (println "start draw")
+         (swap! state assoc :drawing? true))
 
      :end-draw
-     (swap! state assoc :drawing? false))))
+     (do (println "end draw")
+         (swap! state assoc :drawing? false)))))

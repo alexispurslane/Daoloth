@@ -1,4 +1,5 @@
-(ns daoleth.constants)
+(ns daoleth.constants
+  (:use [clojure.set]))
 
 (def initial-state {:objects {:wall \# :door \o :floor \.}
                     :filename "unknown"
@@ -8,9 +9,12 @@
                     :mode :paintbrush
                     :painting-object :floor})
 
+(defn make-2d-map [[width height] base]
+  (vec (replicate height (vec (replicate width base)))))
+
 (defn create-initial-map [state]
-  (swap! state assoc :map (vec (replicate (second (:size @state))
-                                          (vec (replicate (first (:size @state)) \.))))))
+  (swap! state assoc :map (make-2d-map (:size @state)
+                                       (get-in @state [:objects :floor]))))
 
 (defn get-state-from-file [filename]
   (->> filename slurp read-string))
@@ -24,15 +28,33 @@
 (defn +p [[x1 y1] [x2 y2]]
   [(+ x1 x2) (+ y1 y2)])
 
-(defn map-effect [type map [pos-x pos-y] val]
+(defn draw-map [m]
+  (for [line m]
+    (println (clojure.string/join " "
+                                  (clojure.core/map str line)))))
+
+(defn map-effect [type m [pos-x pos-y] val]
   (case type
     :paintbrush
-    (update-in map [pos-y pos-x] (fn [o] val))
+    (update-in m [pos-y pos-x] (fn [_] val))
     :bucketfill
-    (let [start-val (get-in map [pos-y pos-x])]
-      (reduce (fn [acc x]
-                (let [npos (+p x [pos-y pos-x]) cur-val (get-in map npos)]
-                  (if (= cur-val start-val)
-                    (map-effect :bucketfill map npos val))))
-              (update-in map [pos-y pos-x] (fn [o] val))
-              [[-1 0] [1 0] [0 -1] [0 1]]))))
+    (let [start-val (get-in m [pos-y pos-x])]
+      (loop [points (set [[pos-x pos-y]])
+             nm m]
+        (let [inside? (fn [[x y]]
+                        (and (>= x 0) (>= y 0)
+                             (< x (count (first m)))
+                             (< y (count m))))
+              point (first points)
+              old-val (get-in nm (reverse point))]
+          (println points)
+          (cond
+            (and (= old-val start-val) (not (= old-val val)))
+            (let [nm1 (update-in nm (reverse point) (fn [_] val))
+                  mods [[0 1] [1 0] [-1 0] [0 -1]]
+                  new-points (union (rest points)
+                                    (set (filter inside?
+                                                 (map +p (repeat point) mods))))]
+              (recur new-points nm1))
+            (> (count points) 0) (recur (rest points) nm)
+            :else nm))))))
