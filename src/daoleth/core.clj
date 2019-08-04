@@ -84,7 +84,6 @@
 (defn- update-to-match-by-diff [old new canvas]
   (doseq [[old-text new-text index] (map vector old new (iterate inc 0))]
     (when (not (= old-text new-text))
-      (println old-text new-text (keyword (str "#el-" index)))
       (text! (select canvas [(keyword (str "#el-" index))]) (str new-text)))))
 
 (defn add-behaviors [root state]

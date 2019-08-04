@@ -47,7 +47,6 @@
                              (< y (count m))))
               point (first points)
               old-val (get-in nm (reverse point))]
-          (println points)
           (cond
             (and (= old-val start-val) (not (= old-val val)))
             (let [nm1 (update-in nm (reverse point) (fn [_] val))
